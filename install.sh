@@ -5,13 +5,16 @@
 # The UUID of your USB drive can be found using the 'lsblk -f' command
 # This script will format the first USB drive it finds, be careful!
 USB_DEV="/dev/sda1"
-MOUNT_POINT="/mnt/usb-drive"
-TRANSMISSION_USER="rockpi" # Change this!
-TRANSMISSION_PASS="password" # Change this!
+MOUNT_POINT="/mnt/media-drive"
 NETWORK_INTERFACE="eth0" # Change this to your network interface if it's different
 
 # --- START OF SCRIPT ---
-echo "Starting automated setup for ROCK 4C Plus..."
+echo "Starting automated media server setup..."
+
+# Prompt for Transmission credentials
+read -p "Enter a username for Transmission: " TRANSMISSION_USER
+read -s -p "Enter a password for Transmission: " TRANSMISSION_PASS
+echo
 
 # 1. Update and Upgrade System
 echo "1. Updating and upgrading the system..."
@@ -44,19 +47,19 @@ sudo systemctl stop transmission-daemon
 # 4. Configure Transmission
 echo "4. Configuring Transmission..."
 # Create necessary directories for Transmission
-sudo mkdir -p $MOUNT_POINT/transmission/{downloads,incomplete,watch}
+sudo mkdir -p $MOUNT_POINT/downloads
 # Update the Transmission configuration file
 sudo sed -i "s|.*\"rpc-password\".*|\"rpc-password\": \"$TRANSMISSION_PASS\",|" /etc/transmission-daemon/settings.json
 sudo sed -i "s|.*\"rpc-username\".*|\"rpc-username\": \"$TRANSMISSION_USER\",|" /etc/transmission-daemon/settings.json
 sudo sed -i "s|.*\"rpc-whitelist-enabled\".*|\"rpc-whitelist-enabled\": false,|" /etc/transmission-daemon/settings.json
-sudo sed -i "s|.*\"download-dir\".*|\"download-dir\": \"$MOUNT_POINT/transmission/downloads\",|" /etc/transmission-daemon/settings.json
-sudo sed -i "s|.*\"incomplete-dir\".*|\"incomplete-dir\": \"$MOUNT_POINT/transmission/incomplete\",|" /etc/transmission-daemon/settings.json
+sudo sed -i "s|.*\"download-dir\".*|\"download-dir\": \"$MOUNT_POINT/downloads\",|" /etc/transmission-daemon/settings.json
+sudo sed -i "s|.*\"incomplete-dir\".*|\"incomplete-dir\": \"$MOUNT_POINT/downloads\",|" /etc/transmission-daemon/settings.json
 sudo sed -i "s|.*\"incomplete-dir-enabled\".*|\"incomplete-dir-enabled\": true,|" /etc/transmission-daemon/settings.json
-sudo sed -i "s|.*\"watch-dir\".*|\"watch-dir\": \"$MOUNT_POINT/transmission/watch\",|" /etc/transmission-daemon/settings.json
+sudo sed -i "s|.*\"watch-dir\".*|\"watch-dir\": \"$MOUNT_POINT/downloads/watch\",|" /etc/transmission-daemon/settings.json
 sudo sed -i "s|.*\"watch-dir-enabled\".*|\"watch-dir-enabled\": true,|" /etc/transmission-daemon/settings.json
 # Change ownership of Transmission's config and directories
 sudo chown -R debian-transmission:debian-transmission /etc/transmission-daemon/
-sudo chown -R debian-transmission:debian-transmission $MOUNT_POINT/transmission
+sudo chown -R debian-transmission:debian-transmission $MOUNT_POINT/downloads
 
 # Restart Transmission service
 sudo systemctl start transmission-daemon
@@ -75,12 +78,12 @@ sudo cp /etc/minidlna.conf /etc/minidlna.conf.bak
 # Remove the existing media_dir lines to avoid conflicts
 sudo sed -i '/^media_dir=/d' /etc/minidlna.conf
 # Add new media_dir lines pointing to the mounted USB drive
-sudo sed -i "/^#media_dir=/a media_dir=V,$MOUNT_POINT/transmission/downloads" /etc/minidlna.conf
-sudo sed -i "/^#friendly_name=/a friendly_name=ROCK 4C Plus Media Server" /etc/minidlna.conf
+sudo sed -i "/^#media_dir=/a media_dir=V,$MOUNT_POINT/downloads" /etc/minidlna.conf
+sudo sed -i "/^#friendly_name=/a friendly_name=Home Media Server" /etc/minidlna.conf
 # Change the user to run as minidlna
 sudo sed -i "s/#user=minidlna/user=minidlna/" /etc/minidlna.conf
 # Change ownership of the directories
-sudo chown -R minidlna:minidlna $MOUNT_POINT/transmission/downloads
+sudo chown -R minidlna:minidlna $MOUNT_POINT/downloads
 
 # Restart MiniDLNA service
 sudo systemctl start minidlna
@@ -100,7 +103,7 @@ fi
 # Get the IP address of the device
 DEVICE_IP=$(hostname -I | awk '{print $1}')
 # Replace the placeholder IP in index.html with the actual IP
-sudo sed -i "s|<your_rockpi_ip>|$DEVICE_IP|" /var/www/html/media-center/index.html
+sudo sed -i "s|<your_pi_ip>|$DEVICE_IP|" /var/www/html/media-center/index.html
 # Configure Lighttpd to serve the new directory
 sudo sed -i "s|server.document-root = \"/var/www/html\"|server.document-root = \"/var/www/html/media-center\"|" /etc/lighttpd/lighttpd.conf
 # Restart Lighttpd
@@ -120,7 +123,7 @@ echo "--- Setup Complete! ---"
 echo "You can now access your home page at http://$DEVICE_IP"
 echo "Transmission's web interface is at http://$DEVICE_IP:9091"
 echo "Username: $TRANSMISSION_USER"
-echo "Password: $TRANSMISSION_PASS"
+echo "Password: (hidden)"
 echo ""
-echo "Your MiniDLNA server 'ROCK 4C Plus Media Server' should be discoverable on your network."
+echo "Your MiniDLNA server 'Home Media Server' should be discoverable on your network."
 echo "Remember to change the default Transmission username and password for security!"
