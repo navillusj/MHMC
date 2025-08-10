@@ -24,6 +24,15 @@ else
     MEDIA_PATH="$MOUNT_POINT/$MEDIA_DIR"
 fi
 
+# Prompt for cleanup schedule
+echo ""
+echo "Select a cleanup schedule for the USB drive to prevent it from getting full:"
+echo "1: Every 30 days"
+echo "2: Every 60 days"
+echo "3: Every 90 days"
+echo "4: Off (I'll clean it myself)"
+read -p "Enter your choice (1, 2, 3, or 4): " CLEANUP_CHOICE
+
 # 1. Update and Upgrade System
 echo "1. Updating and upgrading the system..."
 sudo apt update -y
@@ -65,7 +74,6 @@ sudo sed -i "s|.*\"incomplete-dir\".*|\"incomplete-dir\": \"$MEDIA_PATH\",|" /et
 sudo sed -i "s|.*\"incomplete-dir-enabled\".*|\"incomplete-dir-enabled\": true,|" /etc/transmission-daemon/settings.json
 sudo sed -i "s|.*\"watch-dir\".*|\"watch-dir\": \"$MEDIA_PATH\",|" /etc/transmission-daemon/settings.json
 sudo sed -i "s|.*\"watch-dir-enabled\".*|\"watch-dir-enabled\": true,|" /etc/transmission-daemon/settings.json
-
 sudo systemctl start transmission-daemon
 sudo systemctl enable transmission-daemon
 
@@ -78,31 +86,64 @@ sudo systemctl stop minidlna
 echo "7. Configuring MiniDLNA..."
 sudo cp /etc/minidlna.conf /etc/minidlna.conf.bak
 sudo sed -i '/^media_dir=/d' /etc/minidlna.conf
-sudo sed -i "/^#media_dir=/a media_dir=V,$MEDIA_PATH" /etc/minidlna.conf
+# Configure for Pictures, Audio, and Video files, and map to the media path
+sudo sed -i "/^#media_dir=/a media_dir=V,P,A,$MEDIA_PATH" /etc/minidlna.conf
 sudo sed -i "/^#friendly_name=/a friendly_name=Home Media Server" /etc/minidlna.conf
 sudo sed -i "s/#user=minidlna/user=minidlna/" /etc/minidlna.conf
-# Note: Ownership for MiniDLNA is handled by the shared 'media' group
 sudo chown -R minidlna:minidlna /var/cache/minidlna
-
 sudo systemctl start minidlna
 sudo systemctl enable minidlna
 
 # 8. Install and Configure Lighttpd
 echo "8. Installing and configuring Lighttpd..."
 sudo apt install lighttpd -y
-sudo mkdir -p /var/www/html/media-center
 if [ -f "index.html" ]; then
-    sudo mv index.html /var/www/html/media-center/
+    sudo mv index.html /var/www/html/
 else
     echo "Warning: index.html not found in the same directory as the script. Please ensure it is there."
 fi
+sudo rm /var/www/html/index.lighttpd.html
 DEVICE_IP=$(hostname -I | awk '{print $1}')
-sudo sed -i "s|<your_pi_ip>|$DEVICE_IP|" /var/www/html/media-center/index.html
-sudo sed -i "s|server.document-root = \"/var/www/html\"|server.document-root = \"/var/www/html/media-center\"|" /etc/lighttpd/lighttpd.conf
+sudo sed -i "s|<your_pi_ip>|$DEVICE_IP|" /var/www/html/index.html
+sudo chown -R www-data:www-data /var/www/html/
+sudo chmod -R 755 /var/www/html/
 sudo systemctl restart lighttpd
 
-# 9. Configure firewall for remote access (UFW)
-echo "9. Configuring firewall for remote access..."
+# 9. Configure cleanup job
+echo "9. Configuring cleanup job..."
+(sudo crontab -l | grep -v 'find $MEDIA_PATH' || true) | sudo crontab -
+if [ "$CLEANUP_CHOICE" == "1" ]; then
+    CLEANUP_SCHEDULE="0 2 * */1 *"
+    echo "Cleanup scheduled for every 30 days."
+elif [ "$CLEANUP_CHOICE" == "2" ]; then
+    CLEANUP_SCHEDULE="0 2 * */2 *"
+    echo "Cleanup scheduled for every 60 days."
+elif [ "$CLEANUP_CHOICE" == "3" ]; then
+    CLEANUP_SCHEDULE="0 2 * */3 *"
+    echo "Cleanup scheduled for every 90 days."
+fi
+
+if [ "$CLEANUP_CHOICE" != "4" ]; then
+    CLEANUP_COMMAND="find \"$MEDIA_PATH\" -mindepth 1 -delete"
+    (sudo crontab -l 2>/dev/null; echo "$CLEANUP_SCHEDULE $CLEANUP_COMMAND") | sudo crontab -
+    echo "Cleanup cron job added successfully."
+else
+    echo "Automatic cleanup disabled."
+fi
+
+# 10. Add daily reboot and MiniDLNA rescan schedules
+echo "10. Adding daily reboot and MiniDLNA rescan schedules..."
+# Remove any existing reboot or minidlna cron jobs to prevent duplicates
+(sudo crontab -l | grep -v 'minidlnad -R' || true) | sudo crontab -
+(sudo crontab -l | grep -v 'shutdown -r now' || true) | sudo crontab -
+# Add the cron job to rescan MiniDLNA every 30 minutes
+(sudo crontab -l 2>/dev/null; echo "*/30 * * * * /usr/bin/minidlnad -R") | sudo crontab -
+# Add the cron job to reboot every day at midnight (00:00)
+(sudo crontab -l 2>/dev/null; echo "0 0 * * * /sbin/shutdown -r now") | sudo crontab -
+echo "Automatic reboot scheduled for every night at midnight."
+
+# 11. Configure firewall for remote access (UFW)
+echo "11. Configuring firewall for remote access..."
 sudo apt install ufw -y
 sudo ufw allow 9091/tcp
 sudo ufw allow 8200/tcp
@@ -117,3 +158,4 @@ echo "Username: $TRANSMISSION_USER"
 echo "Password: (hidden)"
 echo ""
 echo "Your MiniDLNA server 'Home Media Server' should be discoverable on your network."
+echo "Your device will now reboot every night at midnight to ensure all services are operating normally."
