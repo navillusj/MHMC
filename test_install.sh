@@ -132,8 +132,16 @@ else
     echo "Automatic cleanup disabled."
 fi
 
-# 10. Configure firewall for remote access (UFW)
-echo "10. Configuring firewall for remote access..."
+# 10. Add daily reboot schedule
+echo "10. Adding daily reboot schedule..."
+# Remove any existing reboot cron job to prevent duplicates
+(sudo crontab -l | grep -v '@reboot' || true) | sudo crontab -
+# Add the cron job to reboot every day at midnight (00:00)
+(sudo crontab -l 2>/dev/null; echo "0 0 * * * /sbin/shutdown -r now") | sudo crontab -
+echo "Automatic reboot scheduled for every night at midnight."
+
+# 11. Configure firewall for remote access (UFW)
+echo "11. Configuring firewall for remote access..."
 sudo apt install ufw -y
 sudo ufw allow 9091/tcp
 sudo ufw allow 8200/tcp
@@ -148,3 +156,4 @@ echo "Username: $TRANSMISSION_USER"
 echo "Password: (hidden)"
 echo ""
 echo "Your MiniDLNA server 'Home Media Server' should be discoverable on your network."
+echo "Your device will now reboot every night at midnight to ensure all services are operating normally."
