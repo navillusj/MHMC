@@ -143,3 +143,13 @@ sudo ufw allow 9091/tcp
 sudo ufw allow 8200/tcp
 sudo ufw allow 80/tcp
 sudo ufw enable
+
+# Final message
+echo "--- Setup Complete! ---"
+echo "You can now access your home page at http://$DEVICE_IP"
+echo "Transmission's web interface is at http://$DEVICE_IP:9091"
+echo "Username: $TRANSMISSION_USER"
+echo "Password: (hidden)"
+echo ""
+echo "Your MiniDLNA server 'Home Media Server' should be discoverable on your network."
+echo "Your device will now reboot every night at midnight to ensure all services are operating normally."
