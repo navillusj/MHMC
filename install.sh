@@ -68,8 +68,10 @@ echo "6. Setting MiniDLNA location to the root of the mounted USB for P/V/A file
 sudo systemctl stop minidlna
 sudo cp /etc/minidlna.conf /etc/minidlna.conf.bak
 sudo sed -i '/^media_dir=/d' /etc/minidlna.conf
-# Configure for Pictures, Audio, and Video files, and map to the media path
-sudo sed -i "/^#media_dir=/a media_dir=V,P,A,$MOUNT_POINT" /etc/minidlna.conf
+# Use echo to reliably append the lines to the end of the file
+sudo echo "media_dir=P,$MOUNT_POINT" | sudo tee -a /etc/minidlna.conf
+sudo echo "media_dir=A,$MOUNT_POINT" | sudo tee -a /etc/minidlna.conf
+sudo echo "media_dir=V,$MOUNT_POINT" | sudo tee -a /etc/minidlna.conf
 sudo sed -i "/^#friendly_name=/a friendly_name=Home Media Server" /etc/minidlna.conf
 sudo sed -i "s/#user=minidlna/user=minidlna/" /etc/minidlna.conf
 
